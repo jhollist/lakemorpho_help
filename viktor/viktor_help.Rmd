@@ -1,0 +1,72 @@
+---
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Load up the required libraries
+
+```{r}
+library(lakemorpho)
+library(raster)
+library(sp)
+library(rgdal)
+library(gdalUtils)
+library(rgeos)
+```
+
+# Read in vector files  
+
+```{r}
+tst_1lakes <- readOGR("example_data", "tst_1lakes")
+```
+
+# Read in DEM
+
+The ESRI raster needs to be converted to something the Raster package can handle.
+Here I am using `gdalUtilities::gdal_translate` to convert to a tif
+
+```{r}
+gdal_translate("example_data/tst_dem3k/", "example_data/tst_dem3k.tif")
+tst_dem <- raster("example_data/tst_dem3k.tif")
+```
+
+# Crop DEM to extent of lake buffer
+This step isn't documented yet, but if you do this for each of your lakes, it 
+should: 
+
+1. Speed up creation of the lakemorphometry object
+2. Speed up the calculation of the metrics. 
+3. And, most importantly, fix the NA return on the maximum depth (at least it 
+   did for you 1 lake example).  At this time I am not sure why the cropped DEM
+   with the larger extent is returning NA.  Need to dig into that.
+
+These steps estimate a reasonable buffer distance (using the lakeMajorAxisLength 
+function), buffer the lake with that distance, then crop the DEM to the extent 
+of the buffered lake.  
+
+```{r}
+tst_1majorlength <- lakeMajorAxisLength(lakeMorphoClass(tst_1lakes), F)
+tst_1buffer <- gBuffer(tst_1lakes, width = tst_1majorlength)
+tst_1dem <- crop(tst_dem, tst_1buffer)
+```
+
+# Create and plot the lakemorpho object
+
+Now we can create the `lakemorpho` object with the lakes and the cropped DEM.
+
+```{r}
+tst_1lm <- lakeSurroundTopo(tst_1lakes, tst_1dem)
+plot(tst_1lm)
+```
+
+# Calculate the metrics
+
+Lastly, we can calculate the volume:
+
+```{r}
+tst_1volume <- lakeVolume(tst_1lm)
+tst_1volume
+```
+
+Don't use the `calcLakeMetrics` function for this.  There is a bug in how it is doing lakeVolume.  I know what it is but haven't yet fixed it.
